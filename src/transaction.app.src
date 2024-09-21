@@ -9,7 +9,9 @@
             [
                 kernel,
                 stdlib,
-                cowboy
+                cowboy,
+                mysql,
+                palma
             ]
         },
         {mod, {transaction_app, []}},

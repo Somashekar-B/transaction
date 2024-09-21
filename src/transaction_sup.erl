@@ -11,6 +11,8 @@
 -behavior(supervisor).
 -author("somashekar.b").
 
+-include("transaction_constants.hrl").
+
 %% API
 -export([
     start_link/0,
@@ -21,5 +23,31 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
+%%    io:format("~p",[application:get_env(?Application, palma_pools)]),
+    start_palma_pools(),
     transaction_router:start(),
     {ok, {{one_for_one, 10, 10}, []}}.
+
+start_palma_pools() ->
+    {ok, PalmaPools} = application:get_env(?Application, palma_pools),
+    NonStartedPools = lists:foldl(
+        fun({PoolName, NoOfPools, PoolSpecs, ShutdownDelay, RevolverOptions}, Acc) ->
+            try
+                palma:new(PoolName, NoOfPools, PoolSpecs, ShutdownDelay, RevolverOptions),
+                Acc
+            catch
+                _C:_E ->
+                    [PoolName | Acc]
+            end
+        end, [], PalmaPools
+    ),
+    case NonStartedPools of
+        [] ->
+            ok;
+        _ ->
+            lists:foreach(
+                fun(PoolName) ->
+                    palma:stop(PoolName)
+                end, NonStartedPools
+            )
+    end.
