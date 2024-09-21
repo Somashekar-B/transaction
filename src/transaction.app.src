@@ -1,0 +1,18 @@
+{
+    application, transaction,
+    [
+        {description, "Transaction Application that has Admin and URL APIs"},
+        {vsn, "0.1"},
+        {modules, [transaction_app, transaction_app_sup, transaction_app_router]},
+        {registered, []},
+        {applications,
+            [
+                kernel,
+                stdlib,
+                cowboy
+            ]
+        },
+        {mod, {transaction_app, []}},
+        {env, []}
+    ]
+}.
