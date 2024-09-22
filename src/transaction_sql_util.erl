@@ -10,19 +10,23 @@
 -author("somashekar.b").
 
 %% API
--export([query/4]).
+-export([query/5]).
 
-query(PoolName, Query, Params, ConnectionTimeOut) ->
+query(PoolName, Query, Params, ConnectionTimeOut, ConvertToMap) ->
     try
         case palma:pid(PoolName) of
             Pid when is_pid(Pid) ->
                 case mysql:query(Pid, Query, Params, ConnectionTimeOut) of
-                    {ok, _ColumnNames, []} ->
+                    {ok, ColumnNames, []} ->
                         {error, notfound};
                     {ok, ColumnNames, RowValues} ->
-                        {ok, {ColumnNames, RowValues}};
+                        FinalResult = convert_to_map(ColumnNames, RowValues, ConvertToMap),
+                        {ok, FinalResult};
                     {error, Error} ->
                         {error, Error};
+                    ok ->
+                        LastInsertId = mysql:insert_id(Pid),
+                        {ok, LastInsertId};
                     Result ->
                         Result
                 end;
@@ -33,3 +37,18 @@ query(PoolName, Query, Params, ConnectionTimeOut) ->
         _C:_E  ->
             {error, disconnected}
     end.
+
+convert_to_map(ColumnNames, [RowValues], true) ->
+    CombinedList = lists:zip(ColumnNames, RowValues),
+    maps:from_list(CombinedList);
+
+convert_to_map(ColumnNames, RowValues, true) ->
+    Fun = fun(Row) ->
+        CombinedList = lists:zip(ColumnNames, Row),
+        maps:from_list(CombinedList)
+          end,
+    [Fun(X) || X <- RowValues];
+
+convert_to_map(ColumnNames, RowValues, _) ->
+    {ColumnNames, RowValues}.
+

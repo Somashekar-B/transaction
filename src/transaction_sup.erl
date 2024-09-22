@@ -23,8 +23,8 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
-%%    io:format("~p",[application:get_env(?Application, palma_pools)]),
     start_palma_pools(),
+    start_ets_tables(),
     transaction_router:start(),
     {ok, {{one_for_one, 10, 10}, []}}.
 
@@ -33,7 +33,8 @@ start_palma_pools() ->
     NonStartedPools = lists:foldl(
         fun({PoolName, NoOfPools, PoolSpecs, ShutdownDelay, RevolverOptions}, Acc) ->
             try
-                palma:new(PoolName, NoOfPools, PoolSpecs, ShutdownDelay, RevolverOptions),
+                Res = palma:new(PoolName, NoOfPools, PoolSpecs, ShutdownDelay, RevolverOptions),
+                io:format("~p\n",[{PoolName, Res}]),
                 Acc
             catch
                 _C:_E ->
@@ -51,3 +52,16 @@ start_palma_pools() ->
                 end, NonStartedPools
             )
     end.
+
+start_ets_tables() ->
+    {ok, ETSTables} = application:get_env(?Application, ets_tables),
+    lists:foreach(
+        fun(Table) ->
+            ets:new(Table, [
+                named_table,
+                public,
+                {read_concurrency, true},
+                {write_concurrency, true}
+            ])
+        end, ETSTables
+    ).

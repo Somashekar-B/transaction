@@ -9,13 +9,11 @@
 -module(transaction_router).
 -author("somashekar.b").
 
-%%-behaviour(application).
+-include("transaction_constants.hrl").
 
 %% Application callbacks
 -export([start/0,
     stop/0]).
-
--define(PORT, 8000).
 
 %%%===================================================================
 %%% Application callbacks
@@ -37,13 +35,7 @@
     {ok, pid(), State :: term()} |
     {error, Reason :: term()}).
 start() ->
-    Dispatch = cowboy_router:compile(
-        [
-            {'_', [
-                {"/", transaction_handler, []}
-            ]}
-        ]
-    ),
+    Dispatch = cowboy_router:compile(get_routes()),
     {ok, _} = cowboy:start_clear(http, [{port, ?PORT}], #{env => #{dispatch => Dispatch}}),
     ok
     .
@@ -66,3 +58,13 @@ stop() ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+
+get_routes() ->
+    [
+        {'_', [
+            {"/", transaction_handler, []},
+            {"/api/user/:userid", user_profile_handler, [?GetOrDeleteUserData]},
+            {"/api/user/[:userid]", user_profile_handler, [?AddRemoveGetUsers]}
+        ]}
+    ].
