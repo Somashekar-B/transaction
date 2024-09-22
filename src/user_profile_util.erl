@@ -12,13 +12,14 @@
 -include("transaction_constants.hrl").
 
 %% API
--export([authorize_user/2,
+-export([authorize_user/1,
     fetch_all_users/0,
     add_user/1,
     encrypt_password/1,
     update_user/1,
     get_user_data/1,
-    delete_user/1]).
+    delete_user/1,
+    is_nil_or_empty/1]).
 
 fetch_all_users() ->
     case transaction_cache_util:get_all_users() of
@@ -44,7 +45,18 @@ add_user(Request) ->
                                          success ->
                                              transaction_cache_util:invalidate_user(UserId),
                                              transaction_cache_util:invalidate_allusers(),
-                                             #{<<"Message">> => <<"Success">>, <<"Id">> => UserId};
+                                             case transaction_util:create_user_account(Body#{<<"userid">> => UserId}) of
+                                                 {?HTTP_BAD_REQUEST_CODE, Err} ->
+                                                     #{<<"Message">> => <<"Success">>, <<"Id">> => UserId, <<"accountMsg">> => maps:get(<<"Message">>, Err, <<"Failure">>)};
+                                                 {_, Account} ->
+                                                     case maps:is_key(<<"accountNo">>, Account) of
+                                                         true ->
+                                                             AccountNo = maps:get(<<"accountNo">>, Account),
+                                                             #{<<"Message">> => <<"Success">>, <<"Id">> => UserId, <<"accountNo">> => AccountNo};
+                                                         _ ->
+                                                             #{<<"Message">> => <<"Success">>, <<"Id">> => UserId, <<"accountMsg">> => maps:get(<<"Message">>, Account, <<"Failure">>)}
+                                                     end
+                                             end;
                                          _ ->
                                              do_db_rollback(UserId),
                                              #{<<"Message">> => <<"Failure">>}
@@ -91,7 +103,7 @@ update_user(Request) ->
     UserId = maps:get(<<"userId">>, Request, <<>>),
     case is_nil_or_empty(UserId) of
         true ->
-            {?HHTP_BAD_REQUEST_CODE, #{<<"Message">> => <<"Invalid Inputs">>}};
+            {?HTTP_BAD_REQUEST_CODE, #{<<"Message">> => <<"Invalid Inputs">>}};
         _ ->
             case transaction_cache_util:get_user_data(UserId) of
                 {error, _} ->
@@ -129,7 +141,7 @@ get_user_data(UserId) ->
 delete_user(UserId) ->
     case is_nil_or_empty(UserId) of
         true ->
-            {?HHTP_BAD_REQUEST_CODE, #{<<"Message">> => <<"Invalid Inputs">>}};
+            {?HTTP_BAD_REQUEST_CODE, #{<<"Message">> => <<"Invalid Inputs">>}};
         _ ->
             Query = <<"DELETE FROM users_data where userid = ?">>,
             Params = [UserId],
@@ -149,7 +161,7 @@ encrypt_password(Password) ->
 decrypt_password(Password) ->
     base64:decode(Password).
 
-authorize_user(Req0, UserId) ->
+authorize_user(Req0) ->
     case fetch_credentials(Req0) of
         {?AdminUserName, ?AdminPassword} ->
             {true, admin};
@@ -158,9 +170,9 @@ authorize_user(Req0, UserId) ->
                 {error, _} ->
                     false;
                 UserData ->
-                    case Password =:= decrypt_password(maps:get(<<"password">>, UserData)) of
+                    case UserId =:= integer_to_binary(maps:get(<<"userid">>, UserData, -1)) andalso Password =:= decrypt_password(maps:get(<<"password">>, UserData)) of
                         true ->
-                            {true, user};
+                            {true, user, UserId};
                         _ ->
                             false
                     end

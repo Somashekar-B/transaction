@@ -30,7 +30,7 @@ init(Req0, State) ->
     end.
 
 handle_post_request(Req0, State) ->
-    IsAdmin = user_profile_util:authorize_user(Req0, undefined),
+    IsAdmin = user_profile_util:authorize_user(Req0),
     {Status, Result} = case IsAdmin of
                            {true, admin} ->
                                {ok, Body, _} = cowboy_req:read_body(Req0),
@@ -45,8 +45,7 @@ handle_post_request(Req0, State) ->
 
 
 handle_put_request(Req0, State) ->
-    UserId = proplists:get_value(userid, Req0, undefined),
-    IsAdmin = user_profile_util:authorize_user(Req0, UserId),
+    IsAdmin = user_profile_util:authorize_user(Req0),
     {Status, Result} = case IsAdmin of
                            {true, admin} ->
                                {ok, Body, _} = cowboy_req:read_body(Req0),
@@ -62,7 +61,7 @@ handle_get_request(Req0, State) ->
     UserId = cowboy_req:binding(userid, Req0, undefined),
     {Status, Result} = case State of
                            [?AddRemoveGetUsers] ->
-                               IsAdmin = user_profile_util:authorize_user(Req0, UserId),
+                               IsAdmin = user_profile_util:authorize_user(Req0),
                                case IsAdmin of
                                    {true, admin} ->
                                        user_profile_util:fetch_all_users();
@@ -70,11 +69,16 @@ handle_get_request(Req0, State) ->
                                        {?HTTP_UNAUTHORIZED_CODE, #{<<"Message">> => <<"UnAuthorized">>}}
                                end;
                            [?GetOrDeleteUserData] ->
-                               case user_profile_util:authorize_user(Req0, UserId) of
+                               case user_profile_util:authorize_user(Req0) of
                                    {true, admin} ->
                                        user_profile_util:get_user_data(UserId);
-                                   {true, user} ->
-                                       user_profile_util:get_user_data(UserId);
+                                   {true, user, LoggedUserId} ->
+                                       case LoggedUserId of
+                                           UserId ->
+                                               user_profile_util:get_user_data(UserId);
+                                           _ ->
+                                               {?HTTP_UNAUTHORIZED_CODE, #{<<"Message">> => <<"UnAuthorized">>}}
+                                       end;
                                    _ ->
                                        {?HTTP_UNAUTHORIZED_CODE, #{<<"Message">> => <<"UnAuthorized">>}}
                                end;
@@ -88,7 +92,7 @@ handle_delete_request(Req0, State) ->
     UserId = cowboy_req:binding(userid, Req0, undefined),
     {Status, Result} = case State of
                            [?GetOrDeleteUserData] ->
-                               IsAdmin = user_profile_util:authorize_user(Req0, undefined),
+                               IsAdmin = user_profile_util:authorize_user(Req0),
                                case IsAdmin of
                                    {true, admin} ->
                                        user_profile_util:delete_user(UserId);
