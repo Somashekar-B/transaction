@@ -25,16 +25,41 @@ init(Req0, State) ->
             handle_put_request(Req0, State)
     end.
 
-handle_get_request(Req0, Opts) ->
-    Res = cowboy_req:reply(200, ?DEFAULT_HTTP_JSON_HEADER, jiffy:encode(<<"Test Url">>), Req0),
-    {ok, Res, Opts}.
+handle_get_request(Req0, State) ->
+    UserId = cowboy_req:binding(userid, Req0),
+    AccountNo = cowboy_req:binding(accountNo, Req0),
+    {Status, Result} = case State of
+                           [?GetUserTransactions] ->
+                               case user_profile_util:authorize_user(Req0) of
+                                   {true, user, LoggedUserId} ->
+                                       case UserId of
+                                           LoggedUserId ->
+                                               transaction_util:get_all_transactions_for_user_account(UserId, AccountNo);
+                                           _ ->
+                                               {?HTTP_UNAUTHORIZED_CODE, #{<<"Message">> => <<"UnAuthorized">>}}
+                                       end;
+                                   {true, admin} ->
+                                       transaction_util:get_all_transactions_for_user_account(UserId, AccountNo);
+                                   _ ->
+                                       {?HTTP_UNAUTHORIZED_CODE, #{<<"Message">> => <<"UnAuthorized">>}}
+                               end;
+                           _ ->
+                               {?HTTP_NOT_FOUND_CODE, #{<<"Message">> => <<"Method Not Allowed">>}}
+                       end,
+    Res = cowboy_req:reply(Status, ?DEFAULT_HTTP_JSON_HEADER, jiffy:encode(Result), Req0),
+    {ok, Res, State}.
 
 handle_post_request(Req0, State) ->
     {ok, Request, _} = cowboy_req:read_body(Req0),
     Body = jiffy:decode(Request, [return_maps]),
     {Status, Result} = case State of
                            [?CreateUserAccount] ->
-                               transaction_util:create_user_account(Body);
+                               case user_profile_util:authorize_user(Req0) of
+                                   {true, admin} ->
+                                       transaction_util:create_user_account(Body);
+                                   _ ->
+                                       {?HTTP_UNAUTHORIZED_CODE, #{<<"Message">> => <<"UnAuthorized">>}}
+                               end;
                            _ ->
                                {?HTTP_NOT_FOUND_CODE, #{<<"Message">> => <<"Method Not Allowed">>}}
                        end,

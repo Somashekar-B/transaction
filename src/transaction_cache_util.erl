@@ -16,12 +16,14 @@
     get_user_login/1]).
 
 -export([
-    get_account_details/1
+    get_account_details/1,
+    get_user_accounts/1
 ]).
 
 -export([
     is_transaction_allowed/1,
-    update_transactions/1
+    update_transactions/1,
+    get_all_trex_for_user_account/2
 ]).
 
 -export([
@@ -133,7 +135,10 @@ get_user_data(UserId, cachefirst) ->
     end;
 
 get_user_data(UserId, nocache) ->
-    Query = <<"SELECT * FROM users_data WHERE userid = ?">>,
+    Query = <<"SELECT
+    username, email, phone, address,
+    DATE_FORMAT(onboarddate, '%Y-%m-%d %H:%i:%s') AS onboarddate
+    FROM users_data WHERE userid = ?">>,
     Params = [UserId],
     case transaction_sql_util:query(?DBReadPool, Query, Params, 1000, true) of
         {error, notfound} ->
@@ -142,6 +147,50 @@ get_user_data(UserId, nocache) ->
             {error, someerror};
         {ok, UsersData} ->
             UsersData
+    end.
+
+get_user_accounts(UserId) ->
+    get_user_accounts(UserId, cachefirst).
+
+get_user_accounts(UserId, cachefirst) ->
+    case ets:lookup(?AccountsTable, UserId) of
+        [] ->
+            case get_user_accounts(UserId, nocache) of
+                {error, not_found} ->
+                    ets:insert(?AccountsTable, {UserId, not_in_db}),
+                    {error, notfound};
+                {error, _} ->
+                    {error, notfound};
+                Data ->
+                    ets:insert(?AccountsTable, {UserId, Data}),
+                    Data
+
+            end;
+        [{_, Data}] ->
+            case Data of
+                not_in_db ->
+                    {error, notfound};
+                _ ->
+                    Data
+            end
+
+    end;
+
+get_user_accounts(UserId, nocache) ->
+    Query = <<"SELECT
+        accountNo,
+        amount,
+        DATE_FORMAT(onboardeddatetime, '%Y-%m-%d %H:%i:%s') AS onboardeddatetime,
+        DATE_FORMAT(updateddatetime, '%Y-%m-%d %H:%i:%s') AS updateddatetime
+        FROM account_details
+        WHERE userid = ?
+    ">>,
+    Params = [UserId],
+    case transaction_sql_util:query(?DBReadPool, Query, Params, 1000, true) of
+        {ok, Result} ->
+            Result;
+        Error ->
+            Error
     end.
 
 get_account_details(AccountNo) ->
@@ -260,6 +309,50 @@ remove_transactions([Transaction | Rem], TimeLimit) ->
 
 datetime_to_seconds(DateTime) ->
     calendar:datetime_to_gregorian_seconds(DateTime) - 62167219200.
+
+get_all_trex_for_user_account(UserId, AccountNo) ->
+    get_all_trex_for_user_account(UserId, AccountNo, cachefirst).
+
+get_all_trex_for_user_account(UserId, AccountNo, cachefirst) ->
+    Key = {UserId, AccountNo},
+    case ets:lookup(?Transactions, Key) of
+        [] ->
+            case get_all_trex_for_user_account(UserId, AccountNo, nocache) of
+                {error, notfound} ->
+                    ets:insert(?Transactions, {Key, not_in_db}),
+                    {error, nodfound};
+                {error, _} ->
+                    {error, nodfound};
+                Data ->
+                    ets:insert(?Transactions, {Key, Data}),
+                    Data
+            end;
+        [{_, Data}] ->
+            case Data of
+                not_in_db ->
+                    {error, nodfound};
+                _ ->
+                    Data
+            end
+    end;
+
+get_all_trex_for_user_account(UserId, AccountNo, nocache) ->
+    Query = <<"SELECT
+    transaction_id,
+    amount,
+    CASE
+        WHEN txn_type = 0 THEN 'Withdrawal'
+        WHEN txn_type = 1 THEN 'Deposit'
+    END AS transaction_type,
+    DATE_FORMAT(transaction_datetime, '%Y-%m-%d %H:%i:%s') AS transaction_datetime
+    FROM transactions WHERE userid = ? AND accountNo = ? ORDER BY transaction_datetime DESC">>,
+    Params = [UserId, AccountNo],
+    case transaction_sql_util:query(?DBReadPool, Query, Params, 1000, true) of
+        {ok, Result} ->
+            Result;
+        {error, Err} ->
+            {error, Err}
+    end.
 
 invalidate_allusers() ->
     Key = <<"allusers">>,

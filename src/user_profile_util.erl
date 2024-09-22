@@ -135,7 +135,13 @@ get_user_data(UserId) ->
         {error, _} ->
             {?HTTP_OK_RESPONSE_CODE, #{<<"Message">> => <<"UserDetails Not Found">>}};
         Data ->
-            {?HTTP_OK_RESPONSE_CODE, maps:remove(<<"onboarddate">>, Data)}
+            FinalAccounts = case transaction_cache_util:get_user_accounts(UserId) of
+                            {error, _} ->
+                                [];
+                            Accounts ->
+                                Accounts
+                        end,
+            {?HTTP_OK_RESPONSE_CODE, Data#{<<"accounts">> => FinalAccounts}}
     end.
 
 delete_user(UserId) ->
@@ -165,6 +171,8 @@ authorize_user(Req0) ->
     case fetch_credentials(Req0) of
         {?AdminUserName, ?AdminPassword} ->
             {true, admin};
+        {undefined, undefined} ->
+            false;
         {UserId, Password} ->
             case transaction_cache_util:get_user_login(UserId) of
                 {error, _} ->

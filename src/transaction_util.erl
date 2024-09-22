@@ -15,8 +15,17 @@
 -export([
     create_user_account/1,
     deposit_amount/1,
-    withdraw_amount/1
+    withdraw_amount/1,
+    get_all_transactions_for_user_account/2
 ]).
+
+get_all_transactions_for_user_account(UserId, Account) ->
+    case transaction_cache_util:get_all_trex_for_user_account(UserId, Account) of
+        {error, notfound} ->
+            {?HTTP_OK_RESPONSE_CODE, #{<<"Message">> => <<"No Transactions Found For Given User Account">>}};
+        Data ->
+            {?HTTP_OK_RESPONSE_CODE, Data}
+    end.
 
 create_user_account(Request) ->
     UserId = maps:get(<<"userid">>, Request, <<>>),

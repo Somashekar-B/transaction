@@ -32,6 +32,7 @@
 -define(CreateUserAccount, "createuseraccount").
 -define(DepositAmount, "depositAmount").
 -define(WithDrawAmount, "withdrawAmount").
+-define(GetUserTransactions, "usertransactions").
 
 -define(Users_Table, usersdata).
 -define(AccountsTable, accounts).

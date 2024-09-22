@@ -67,6 +67,9 @@ get_routes() ->
             {"/api/user/:userid", user_profile_handler, [?GetOrDeleteUserData]},
             {"/api/user/[:userid]", user_profile_handler, [?AddRemoveGetUsers]},
 
+            {"/api/account", transaction_handler, [?CreateUserAccount]},
+
+            {"/api/transaction/:userid/:accountNo", transaction_handler, [?GetUserTransactions]},
             {"/api/transaction/deposit/:userid", transaction_handler, [?DepositAmount]},
             {"/api/transaction/withdraw/:userid", transaction_handler, [?WithDrawAmount]}
         ]}
