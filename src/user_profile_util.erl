@@ -180,7 +180,12 @@ authorize_user(Req0) ->
                 UserData ->
                     case UserId =:= integer_to_binary(maps:get(<<"userid">>, UserData, -1)) andalso Password =:= decrypt_password(maps:get(<<"password">>, UserData)) of
                         true ->
-                            {true, user, UserId};
+                            case maps:get(<<"role">>, UserData, <<>>) of
+                                <<"admin">> ->
+                                    {true, admin};
+                                _ ->
+                                    {true, user, UserId}
+                            end;
                         _ ->
                             false
                     end
